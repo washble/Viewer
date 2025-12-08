@@ -36,8 +36,12 @@
 <body>
 <h2>폴더 파일 뷰어</h2>
 
-<!-- 폴더 선택 -->
-<input type="file" id="folderInput" webkitdirectory multiple />
+<div class="controls">
+  <!-- 폴더 선택 -->
+  <input type="file" id="folderInput" webkitdirectory multiple />
+  <!-- 현재 선택된 파일 -->
+  <span id="fileStatus">파일 상태: 없음</span>
+</div>
 
 <!-- 기본 컨트롤 -->
 <div class="controls">
@@ -133,6 +137,9 @@
 
     currentIndex = index;
     fileIndexInput.value = currentIndex + 1;
+
+    const fileStatus = document.getElementById('fileStatus');
+    fileStatus.textContent = `파일: ${file.name}`;
   }
 
   prevBtn.addEventListener('click', () => {
