@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>폴더 파일 뷰어</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  #viewer {
+    flex-grow: 1;              /* 화면 남는 공간을 모두 차지 */
+    margin-top: 5px;
+    text-align: center;
+    overflow-y: auto;
+    height: 100%;
+  }
+  #viewer img {
+    max-width: 100%;
+    height: 100%;              /* 화면 아래까지 확장 */
+    display: block;
+    margin: auto;
+    transition: transform 0.2s ease;
+  }
+  #viewer pre {
+    white-space: pre-wrap;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    padding: 5px;
+    background: #fafafa;
+    height: 70vh;   /* 뷰포트 기준 */
+    overflow-y: auto;
+    text-align: left;
+  }
+  .controls { margin-top: 12px; }
+  .controls button, .controls input { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h2>폴더 파일 뷰어</h2>
+
+<!-- 폴더 선택 -->
+<input type="file" id="folderInput" webkitdirectory multiple />
+
+<!-- 기본 컨트롤 -->
+<div class="controls">
+  <button id="prevBtn">◀ 이전</button>
+  <button id="nextBtn">다음 ▶</button>
+  <label>
+    파일 번호 선택:
+    <input type="number" id="fileIndexInput" value="1" min="1" />
+    <button id="goBtn">이동</button>
+  </label>
+</div>
+
+<!-- 텍스트 전용 컨트롤 -->
+<div class="controls" id="textControls" style="display:none;">
+  <button id="increaseBtn">글씨 크게 (+)</button>
+  <button id="decreaseBtn">글씨 작게 (-)</button>
+  <label>
+    글씨 크기 직접 입력:
+    <input type="number" id="fontSizeInput" value="16" min="8" max="72" /> px
+    <button id="applySizeBtn">적용</button>
+  </label>
+</div>
+
+<!-- 이미지 전용 컨트롤 -->
+<div class="controls" id="imageControls" style="display:none;">
+  <button id="zoomInBtn">이미지 확대 (+)</button>
+  <button id="zoomOutBtn">이미지 축소 (-)</button>
+  <label>
+    확대 배율:
+    <input type="number" id="imageScaleInput" value="1" step="0.1" min="0.1" max="5" />
+    <button id="applyScaleBtn">적용</button>
+  </label>
+</div>
+
+<!-- 파일 표시 영역 -->
+<div id="viewer"></div>
+
+<script>
+  let files = [];
+  let currentIndex = 0;
+  let currentScale = 1;
+
+  const folderInput = document.getElementById('folderInput');
+  const viewer = document.getElementById('viewer');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const fileIndexInput = document.getElementById('fileIndexInput');
+  const goBtn = document.getElementById('goBtn');
+  const textControls = document.getElementById('textControls');
+  const imageControls = document.getElementById('imageControls');
+  const fontSizeInput = document.getElementById('fontSizeInput');
+  const imageScaleInput = document.getElementById('imageScaleInput');
+
+  folderInput.addEventListener('change', () => {
+    files = Array.from(folderInput.files);
+    if (files.length === 0) {
+      alert("폴더에 파일이 없습니다.");
+      return;
+    }
+    currentIndex = 0;
+    showFile(currentIndex);
+  });
+
+  function showFile(index) {
+    if (index < 0 || index >= files.length) return;
+    const file = files[index];
+    const reader = new FileReader();
+
+    if (file.type.startsWith("image/")) {
+      reader.onload = (e) => {
+        viewer.innerHTML = `<img id="imageContent" src="${e.target.result}" alt="이미지">`;
+        textControls.style.display = "none";
+        imageControls.style.display = "block";
+
+        const img = document.getElementById('imageContent');
+        img.style.transform = `scale(${currentScale})`;
+        img.style.transformOrigin = "top left"; // 왼쪽 위 기준으로 확대
+      };
+      reader.readAsDataURL(file);
+    } else {
+      reader.onload = (e) => {
+        viewer.innerHTML = `<pre id="textContent">${e.target.result}</pre>`;
+        textControls.style.display = "block";
+        imageControls.style.display = "none";
+
+        let newSize = parseInt(fontSizeInput.value);
+        if (newSize >= 8 && newSize <= 72) {
+          document.getElementById('textContent').style.fontSize = newSize + "px";
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    currentIndex = index;
+    fileIndexInput.value = currentIndex + 1;
+  }
+
+  prevBtn.addEventListener('click', () => {
+    if (currentIndex > 0) showFile(currentIndex - 1);
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentIndex < files.length - 1) showFile(currentIndex + 1);
+  });
+
+  goBtn.addEventListener('click', () => {
+    const idx = parseInt(fileIndexInput.value, 10) - 1;
+    if (idx >= 0 && idx < files.length) {
+      showFile(idx);
+    } else {
+      alert("잘못된 번호입니다. 1 ~ " + files.length + " 사이로 입력하세요.");
+    }
+  });
+
+  // 텍스트 크기 조절
+  document.getElementById('increaseBtn').addEventListener('click', () => {
+    const textContent = document.getElementById('textContent');
+    if (textContent) {
+      let currentSize = parseInt(window.getComputedStyle(textContent).fontSize);
+      setFontSize(currentSize + 2);
+    }
+  });
+
+  document.getElementById('decreaseBtn').addEventListener('click', () => {
+    const textContent = document.getElementById('textContent');
+    if (textContent) {
+      let currentSize = parseInt(window.getComputedStyle(textContent).fontSize);
+      if (currentSize > 8) setFontSize(currentSize - 2);
+    }
+  });
+
+  document.getElementById('applySizeBtn').addEventListener('click', () => {
+    const textContent = document.getElementById('textContent');
+    if (textContent) {
+      let newSize = parseInt(fontSizeInput.value);
+      if (newSize >= 8 && newSize <= 72) {
+        setFontSize(newSize);
+      }
+    }
+  });
+
+  function setFontSize(size) {
+    const textContent = document.getElementById('textContent');
+    if (textContent) {
+      textContent.style.fontSize = size + "px";
+      fontSizeInput.value = size;
+    }
+  }
+
+  // 이미지 확대/축소
+  document.getElementById('zoomInBtn').addEventListener('click', () => {
+    setImageScale(currentScale + 0.1);
+  });
+
+  document.getElementById('zoomOutBtn').addEventListener('click', () => {
+    if (currentScale > 0.2) setImageScale(currentScale - 0.1);
+  });
+
+  document.getElementById('applyScaleBtn').addEventListener('click', () => {
+    let newScale = parseFloat(imageScaleInput.value);
+    if (newScale >= 0.1 && newScale <= 5) {
+      setImageScale(newScale);
+    }
+  });
+
+  function setImageScale(scale) {
+    const img = document.getElementById('imageContent');
+    if (img) {
+      currentScale = scale;
+      img.style.transform = `scale(${currentScale})`;
+      img.style.transformOrigin = "top left"; // 왼쪽 위 기준으로 확대
+      imageScaleInput.value = currentScale.toFixed(2);
+    }
+  }
+</script>
+</body>
+</html>

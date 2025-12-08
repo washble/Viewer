@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>숫자 인식 파일 이름 변환 도구</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 1100px; }
+  .controls label { display: flex; flex-direction: column; font-size: 14px; }
+  .row { display:flex; gap:12px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  th { background: #f5f5f5; }
+  tbody tr:nth-child(odd) { background: #fafafa; }
+  .warn { color:#b00; font-size:12px; }
+  .status { margin-top: 12px; color: #333; }
+</style>
+</head>
+<body>
+<h2>숫자 인식 파일 이름 변환 도구</h2>
+
+<div class="controls">
+  <label>폴더 선택
+    <input type="file" id="folderInput" webkitdirectory multiple />
+  </label>
+  <label>Prefix (앞부분)
+    <input type="text" id="prefix" placeholder="예: 파일이름-" value="파일이름-" />
+  </label>
+  <label>Postfix (뒷부분)
+    <input type="text" id="postfix" placeholder="예: 번" value="번" />
+  </label>
+  <label>Digits (자리수)
+    <input type="number" id="digits" value="3" min="1" />
+  </label>
+</div>
+
+<div class="row">
+  <button id="loadBtn">파일 불러오기</button>
+  <button id="sortAscBtn">숫자 오름차순</button>
+  <button id="sortDescBtn">숫자 내림차순</button>
+  <label><input type="checkbox" id="excludeHtml" checked /> .html 파일 제외</label>
+</div>
+
+<div class="row">
+  <label><input type="radio" name="mode" value="pad" checked /> Pad original number (원래 숫자 유지)</label>
+  <label><input type="radio" name="mode" value="reindex" /> Reindex from start (처음부터 다시 번호 매기기)</label>
+  <label><input type="radio" name="mode" value="replaceNum" /> Replace only number (prefix/postfix 그대로 두고 숫자만 교체)</label>
+  <label>Start number
+    <input type="number" id="startNum" value="1" min="1" />
+  </label>
+  <button id="applyBtn">변환 적용(미리보기)</button>
+  <button id="saveBtn">선택 폴더에 저장</button>
+</div>
+
+<table id="fileTable">
+  <thead>
+    <tr>
+      <th style="width:90px">번호</th>
+      <th>원래 이름</th>
+      <th>추출 숫자</th>
+      <th>새 이름 (미리보기)</th>
+      <th style="width:120px">확장자</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div class="status" id="status"></div>
+
+<script>
+  let files = [];        // {file: File, name: string, ext: string, num: number|null}[]
+  const folderInput = document.getElementById('folderInput');
+  const prefixEl = document.getElementById('prefix');
+  const postfixEl = document.getElementById('postfix');
+  const digitsEl = document.getElementById('digits');
+  const startNumEl = document.getElementById('startNum');
+  const excludeHtmlEl = document.getElementById('excludeHtml');
+  const statusEl = document.getElementById('status');
+  const tbody = document.querySelector('#fileTable tbody');
+
+  document.getElementById('loadBtn').addEventListener('click', () => {
+    if (!folderInput.files || folderInput.files.length === 0) {
+      setStatus('폴더를 먼저 선택하세요.');
+      return;
+    }
+    const raw = Array.from(folderInput.files);
+    files = raw
+      .filter(f => !excludeHtmlEl.checked || !f.name.toLowerCase().endsWith('.html'))
+      .map(f => {
+        const ext = getExt(f.name);
+        const num = extractNumber(f.name);
+        return { file: f, name: f.name, ext, num };
+      });
+
+    // 기본: 숫자 오름차순 (숫자 없으면 뒤로)
+    files.sort(compareByNumAsc);
+    renderTable();
+    setStatus(`파일 ${files.length}개 로드 완료. (숫자 기준 오름차순)`);
+  });
+
+  document.getElementById('sortAscBtn').addEventListener('click', () => {
+    files.sort(compareByNumAsc);
+    renderTable();
+    setStatus('숫자 오름차순 정렬 완료.');
+  });
+
+  document.getElementById('sortDescBtn').addEventListener('click', () => {
+    files.sort(compareByNumDesc);
+    renderTable();
+    setStatus('숫자 내림차순 정렬 완료.');
+  });
+
+  document.getElementById('applyBtn').addEventListener('click', () => {
+    const prefix = prefixEl.value || '';
+    const postfix = postfixEl.value || '';
+    const digits = parseInt(digitsEl.value || '0', 10);
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    const startNum = parseInt(startNumEl.value || '1', 10);
+
+    if (!digits || digits < 1) {
+      setStatus('Digits(자리수)를 올바르게 입력하세요.');
+      return;
+    }
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.forEach((row, idx) => {
+      const hasNum = row.dataset.num !== '' && row.dataset.num !== 'null';
+      let n;
+
+      if (mode === 'pad') {
+        if (!hasNum) {
+          row.cells[3].innerHTML = '<span class="warn">숫자 없음 → 건너뜀</span>';
+          row.dataset.newName = '';
+          return;
+        }
+        n = parseInt(row.dataset.num, 10);
+      } else if (mode === 'reindex') {
+        n = startNum + idx;
+      } else if (mode === 'replaceNum') {
+        n = startNum + idx;
+      }
+
+      const numStr = String(n).padStart(digits, '0');
+      const ext = row.dataset.ext || '';
+
+      let newName;
+      if (mode === 'replaceNum') {
+        // 기존 파일명에서 첫 번째 숫자 토큰만 교체
+        const origName = row.dataset.originalName;
+        if (hasNum) {
+          newName = origName.replace(/(\d+)/, numStr);
+        } else {
+          // 숫자가 없으면 prefix+number+postfix로 새로 만들어줌
+          newName = `${prefix}${numStr}${postfix}${ext}`;
+        }
+        // 확장자 일관성 유지
+        if (!newName.endsWith(ext)) newName += ext;
+      } else {
+        // pad / reindex 모드: 새 이름을 prefix+number+postfix+ext로 구성
+        newName = `${prefix}${numStr}${postfix}${ext}`;
+      }
+
+      row.cells[3].textContent = newName;
+      row.dataset.newName = newName;
+    });
+
+    let modeText = '';
+    if (mode === 'pad') modeText = '원래 숫자 패딩';
+    else if (mode === 'reindex') modeText = '재번호 매기기';
+    else if (mode === 'replaceNum') modeText = '숫자만 교체 (prefix/postfix 유지)';
+
+    setStatus(`미리보기 적용 완료. 모드: ${modeText}`);
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    if (rows.length === 0) {
+      setStatus('저장할 항목이 없습니다. 먼저 파일을 불러오세요.');
+      return;
+    }
+    const missingPreview = rows.some(r => !r.dataset.newName);
+    if (missingPreview) {
+      setStatus('먼저 "변환 적용(미리보기)"을 눌러 새 이름을 생성하세요.');
+      return;
+    }
+
+    let dirHandle;
+    try {
+      dirHandle = await showDirectoryPicker();
+    } catch (e) {
+      setStatus('대상 폴더 선택이 취소되었습니다.');
+      return;
+    }
+
+    let saved = 0;
+    for (let i = 0; i < files.length; i++) {
+      const fileInfo = files[i];
+      const row = rows[i];
+      const newName = row.dataset.newName;
+      if (!newName) continue; // 숫자 없어서 건너뛴 항목 등
+
+      try {
+        const targetHandle = await dirHandle.getFileHandle(newName, { create: true });
+        const writable = await targetHandle.createWritable();
+        const data = await fileInfo.file.arrayBuffer();
+        await writable.write(data);
+        await writable.close();
+        saved++;
+      } catch (err) {
+        console.error(err);
+        setStatus(`저장 중 오류: ${fileInfo.name} → ${newName}`);
+        return;
+      }
+    }
+    setStatus(`저장 완료: ${saved}개 파일을 새 이름으로 저장했습니다.`);
+  });
+
+  function renderTable() {
+    tbody.innerHTML = '';
+    files.forEach((fi, idx) => {
+      const tr = document.createElement('tr');
+      tr.dataset.originalName = fi.name;
+      tr.dataset.num = fi.num != null ? String(fi.num) : '';
+      tr.dataset.ext = fi.ext;
+      tr.dataset.newName = '';
+      tr.innerHTML = `
+        <td>${idx + 1}</td>
+        <td>${fi.name}</td>
+        <td>${fi.num != null ? fi.num : '<span class="warn">숫자 없음</span>'}</td>
+        <td></td>
+        <td>${fi.ext}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // 숫자 추출: "123화" 패턴 우선, 없으면 첫 숫자
+  function extractNumber(name) {
+    const m1 = name.match(/(\d+)\s*화/); // e.g., "-238화", " 237화"
+    if (m1) return parseInt(m1[1], 10);
+    const m2 = name.match(/(\d+)/);      // fallback: first number anywhere
+    return m2 ? parseInt(m2[1], 10) : null;
+  }
+
+  function getExt(name) {
+    const dot = name.lastIndexOf('.');
+    return dot >= 0 ? name.substring(dot) : '';
+  }
+
+  function compareByNumAsc(a, b) {
+    if (a.num == null && b.num == null) return a.name.localeCompare(b.name, 'ko', { numeric: true });
+    if (a.num == null) return 1;  // 숫자 없는 파일은 뒤로
+    if (b.num == null) return -1;
+    if (a.num !== b.num) return a.num - b.num;
+    return a.name.localeCompare(b.name, 'ko', { numeric: true });
+  }
+
+  function compareByNumDesc(a, b) {
+    if (a.num == null && b.num == null) return b.name.localeCompare(a.name, 'ko', { numeric: true });
+    if (a.num == null) return 1;
+    if (b.num == null) return -1;
+    if (a.num !== b.num) return b.num - a.num;
+    return b.name.localeCompare(a.name, 'ko', { numeric: true });
+  }
+
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>이미지 뷰어 (슬라이드 / 만화형식)</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  #viewer { margin-top: 20px; }
+  #viewer img { max-width: 100%; max-height: 600px; display: block; margin: auto; }
+  #comicView img { max-width: 100%; display: block; margin-bottom: 12px; border: 1px solid #ccc; } /* 세로 일렬 */
+  #comicViewTight img { max-width: 100%; display: block; } /* 여백 없이 붙임 */
+  .controls { margin-top: 12px; }
+  .controls button { margin-right: 8px; }
+</style>
+</head>
+<body>
+<h2>이미지 뷰어</h2>
+
+<!-- 폴더 선택 -->
+<input type="file" id="folderInput" webkitdirectory multiple />
+
+<!-- 모드 선택 -->
+<div class="controls">
+  <button id="slideModeBtn">슬라이드 모드</button>
+  <button id="comicModeBtn">만화 모드 (여백 있음)</button>
+  <button id="comicTightModeBtn">만화 모드 (붙임)</button>
+</div>
+
+<!-- 공통 폴더 이동 컨트롤 -->
+<div class="controls">
+  <button id="prevFolderBtn">◀ 이전 폴더</button>
+  <button id="nextFolderBtn">다음 폴더 ▶</button>
+  <!-- 숫자로 폴더 이동 -->
+  <input type="number" id="folderNumberInput" min="1" style="width:60px;">
+  <button id="goFolderBtn">이동</button>
+  <!-- 오름차순/내림차순 버튼 -->
+  <button id="ascBtn">폴더 오름차순</button>
+  <button id="descBtn">폴더 내림차순</button>
+</div>
+
+<!-- 슬라이드 모드 -->
+<div id="viewer" style="display:none;">
+  <div class="controls">
+    <button id="prevBtn">◀ 이전 이미지</button>
+    <button id="nextBtn">다음 이미지 ▶</button>
+  </div>
+  <div id="slideContainer"></div>
+</div>
+
+<!-- 만화 모드 (일반) -->
+<div id="comicView" style="display:none;">
+  <div id="comicContainer"></div>
+</div>
+
+<!-- 만화 모드 (붙임) -->
+<div id="comicViewTight" style="display:none;">
+  <div id="comicTightContainer"></div>
+</div>
+
+<script>
+  let folderMap = new Map(); // 폴더명 → 이미지 리스트
+  let folderNames = [];      // 폴더명 배열
+  let currentFolderIndex = 0;
+  let currentImageIndex = 0;
+
+  const folderInput = document.getElementById('folderInput');
+  const viewer = document.getElementById('viewer');
+  const comicView = document.getElementById('comicView');
+  const comicViewTight = document.getElementById('comicViewTight');
+  const slideContainer = document.getElementById('slideContainer');
+  const comicContainer = document.getElementById('comicContainer');
+  const comicTightContainer = document.getElementById('comicTightContainer');
+  const folderNumberInput = document.getElementById('folderNumberInput');
+
+  folderInput.addEventListener('change', () => {
+    folderMap.clear();
+    folderNames = [];
+
+    Array.from(folderInput.files)
+      .filter(f => f.type.startsWith("image/"))
+      .forEach(f => {
+        const pathParts = f.webkitRelativePath.split("/");
+        const folderName = pathParts[1]; // 최상위 선택 폴더 하위의 폴더명
+        if (!folderMap.has(folderName)) {
+          folderMap.set(folderName, []);
+          folderNames.push(folderName);
+        }
+        folderMap.get(folderName).push(URL.createObjectURL(f));
+      });
+
+    if (folderNames.length === 0) {
+      alert("이미지 폴더가 없습니다.");
+      return;
+    }
+    currentFolderIndex = 0;
+    showSlideMode(); // 기본은 슬라이드 모드
+  });
+
+  // 현재 폴더의 이미지 배열 가져오기
+  function getCurrentFolderImages() {
+    const folderName = folderNames[currentFolderIndex];
+    return folderMap.get(folderName) || [];
+  }
+
+  // 슬라이드 모드
+  function showSlideMode() {
+    viewer.style.display = "block";
+    comicView.style.display = "none";
+    comicViewTight.style.display = "none";
+    currentImageIndex = 0;
+    showImage(currentImageIndex);
+  }
+
+  function showImage(index) {
+    const images = getCurrentFolderImages();
+    folderNumberInput.value = currentFolderIndex + 1; // 현재 폴더 번호 표시
+    slideContainer.innerHTML = `<h3>${folderNames[currentFolderIndex]} (폴더 ${currentFolderIndex+1}/${folderNames.length})</h3>
+                                <img src="${images[index]}" alt="이미지">`;
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', () => {
+    const images = getCurrentFolderImages();
+    if (currentImageIndex > 0) {
+      currentImageIndex--;
+      showImage(currentImageIndex);
+    }
+  });
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    const images = getCurrentFolderImages();
+    if (currentImageIndex < images.length - 1) {
+      currentImageIndex++;
+      showImage(currentImageIndex);
+    }
+  });
+
+  // 공통 폴더 이동 함수
+  function moveFolder(direction) {
+    if (direction === -1 && currentFolderIndex > 0) {
+      currentFolderIndex--;
+    } else if (direction === 1 && currentFolderIndex < folderNames.length - 1) {
+      currentFolderIndex++;
+    }
+    currentImageIndex = 0;
+    if (viewer.style.display === "block") {
+      showImage(currentImageIndex);
+    } else if (comicView.style.display === "block") {
+      showComicMode();
+    } else if (comicViewTight.style.display === "block") {
+      showComicTightMode();
+    }
+  }
+
+  document.getElementById('prevFolderBtn').addEventListener('click', () => moveFolder(-1));
+  document.getElementById('nextFolderBtn').addEventListener('click', () => moveFolder(1));
+
+  // 숫자로 폴더 이동
+  document.getElementById('goFolderBtn').addEventListener('click', () => {
+    const num = parseInt(folderNumberInput.value, 10);
+    if (!isNaN(num) && num >= 1 && num <= folderNames.length) {
+      currentFolderIndex = num - 1;
+      currentImageIndex = 0;
+      if (viewer.style.display === "block") {
+        showImage(currentImageIndex);
+      } else if (comicView.style.display === "block") {
+        showComicMode();
+      } else if (comicViewTight.style.display === "block") {
+        showComicTightMode();
+      }
+    } else {
+      alert("잘못된 폴더 번호입니다.");
+    }
+  });
+
+  // 오름차순/내림차순 버튼
+  document.getElementById('ascBtn').addEventListener('click', () => {
+    folderNames.sort();
+    currentFolderIndex = 0;
+    currentImageIndex = 0;
+    if (viewer.style.display === "block") {
+      showImage(currentImageIndex);
+    } else if (comicView.style.display === "block") {
+      showComicMode();
+    } else if (comicViewTight.style.display === "block") {
+      showComicTightMode();
+    }
+  });
+
+  document.getElementById('descBtn').addEventListener('click', () => {
+    folderNames.sort().reverse();
+    currentFolderIndex = 0;
+    currentImageIndex = 0;
+    if (viewer.style.display === "block") {
+      showImage(currentImageIndex);
+    } else if (comicView.style.display === "block") {
+      showComicMode();
+    } else if (comicViewTight.style.display === "block") {
+      showComicTightMode();
+    }
+  });
+
+  // 만화 모드 (여백 있음)
+  function showComicMode() {
+    viewer.style.display = "none";
+    comicView.style.display = "block";
+    comicViewTight.style.display = "none";
+    const images = getCurrentFolderImages();
+    comicContainer.innerHTML = `<h3>${folderNames[currentFolderIndex]} (폴더 ${currentFolderIndex+1}/${folderNames.length})</h3>` +
+      images.map(src => `<img src="${src}" alt="만화 이미지">`).join("");
+    folderNumberInput.value = currentFolderIndex + 1;
+  }
+
+  // 만화 모드 (붙임)
+  function showComicTightMode() {
+    viewer.style.display = "none";
+    comicView.style.display = "none";
+    comicViewTight.style.display = "block";
+    const images = getCurrentFolderImages();
+    comicTightContainer.innerHTML = `<h3>${folderNames[currentFolderIndex]} (폴더 ${currentFolderIndex+1}/${folderNames.length})</h3>` +
+      images.map(src => `<img src="${src}" alt="만화 이미지">`).join("");
+    folderNumberInput.value = currentFolderIndex + 1;
+  }
+
+  document.getElementById('slideModeBtn').addEventListener('click', showSlideMode);
+  document.getElementById('comicModeBtn').addEventListener('click', showComicMode);
+  document.getElementById('comicTightModeBtn').addEventListener('click', showComicTightMode);
+</script>
+</body>
+</html>
