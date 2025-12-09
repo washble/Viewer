@@ -6,7 +6,7 @@
 <style>
   body { font-family: Arial, sans-serif; margin: 20px; }
   #viewer {
-    flex-grow: 1;              /* 화면 남는 공간을 모두 차지 */
+    flex-grow: 1;
     margin-top: 5px;
     text-align: center;
     overflow-y: auto;
@@ -14,7 +14,7 @@
   }
   #viewer img {
     max-width: 100%;
-    height: 100%;              /* 화면 아래까지 확장 */
+    height: 100%;
     display: block;
     margin: auto;
     transition: transform 0.2s ease;
@@ -25,9 +25,14 @@
     border: 1px solid #ccc;
     padding: 5px;
     background: #fafafa;
-    height: 70vh;   /* 뷰포트 기준 */
+    height: 70vh;
     overflow-y: auto;
     text-align: left;
+  }
+  #viewer embed {
+    width: 100%;
+    height: 800px;
+    border: 1px solid #ccc;
   }
   .controls { margin-top: 12px; }
   .controls button, .controls input { margin-right: 8px; }
@@ -37,13 +42,10 @@
 <h2>폴더 파일 뷰어</h2>
 
 <div class="controls">
-  <!-- 폴더 선택 -->
   <input type="file" id="folderInput" webkitdirectory multiple />
-  <!-- 현재 선택된 파일 -->
   <span id="fileStatus">파일 상태: 없음</span>
 </div>
 
-<!-- 기본 컨트롤 -->
 <div class="controls">
   <button id="prevBtn">◀ 이전</button>
   <button id="nextBtn">다음 ▶</button>
@@ -54,7 +56,6 @@
   </label>
 </div>
 
-<!-- 텍스트 전용 컨트롤 -->
 <div class="controls" id="textControls" style="display:none;">
   <button id="decreaseBtn">글씨 작게 (-)</button>
   <button id="increaseBtn">글씨 크게 (+)</button>
@@ -65,7 +66,6 @@
   </label>
 </div>
 
-<!-- 이미지 전용 컨트롤 -->
 <div class="controls" id="imageControls" style="display:none;">
   <button id="zoomInBtn">이미지 확대 (+)</button>
   <button id="zoomOutBtn">이미지 축소 (-)</button>
@@ -76,7 +76,6 @@
   </label>
 </div>
 
-<!-- 파일 표시 영역 -->
 <div id="viewer"></div>
 
 <script>
@@ -118,9 +117,16 @@
 
         const img = document.getElementById('imageContent');
         img.style.transform = `scale(${currentScale})`;
-        img.style.transformOrigin = "top left"; // 왼쪽 위 기준으로 확대
+        img.style.transformOrigin = "top left";
       };
       reader.readAsDataURL(file);
+
+    } else if (file.type === "application/pdf") {
+      const blobUrl = URL.createObjectURL(file);
+      viewer.innerHTML = `<embed src="${blobUrl}" type="application/pdf" width="100%" height="800px" />`;
+      textControls.style.display = "none";
+      imageControls.style.display = "none";
+
     } else {
       reader.onload = (e) => {
         viewer.innerHTML = `<pre id="textContent">${e.target.result}</pre>`;
@@ -137,9 +143,7 @@
 
     currentIndex = index;
     fileIndexInput.value = currentIndex + 1;
-
-    const fileStatus = document.getElementById('fileStatus');
-    fileStatus.textContent = `파일: ${file.name}`;
+    document.getElementById('fileStatus').textContent = `파일: ${file.name}`;
   }
 
   prevBtn.addEventListener('click', () => {
@@ -159,7 +163,6 @@
     }
   });
 
-  // 텍스트 크기 조절
   document.getElementById('increaseBtn').addEventListener('click', () => {
     const textContent = document.getElementById('textContent');
     if (textContent) {
@@ -194,7 +197,6 @@
     }
   }
 
-  // 이미지 확대/축소
   document.getElementById('zoomInBtn').addEventListener('click', () => {
     setImageScale(currentScale + 0.1);
   });
@@ -215,7 +217,7 @@
     if (img) {
       currentScale = scale;
       img.style.transform = `scale(${currentScale})`;
-      img.style.transformOrigin = "top left"; // 왼쪽 위 기준으로 확대
+      img.style.transformOrigin = "top left";
       imageScaleInput.value = currentScale.toFixed(2);
     }
   }
