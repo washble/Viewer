@@ -28,7 +28,9 @@
     height: 70vh;
     overflow-y: auto;
     text-align: left;
+    color: #333;
     font-family: "Arial", monospace;
+    text-shadow: 0.5px 0.5px 1px rgba(0,0,0,0.1);
   }
   #viewer embed {
     width: 100%;
@@ -84,6 +86,7 @@
   let files = [];
   let currentIndex = 0;
   let currentScale = 1;
+  let isBold = false;
 
   const folderInput = document.getElementById('folderInput');
   const viewer = document.getElementById('viewer');
@@ -135,10 +138,12 @@
         textControls.style.display = "block";
         imageControls.style.display = "none";
 
+        const textContent = document.getElementById('textContent');
         let newSize = parseInt(fontSizeInput.value);
         if (newSize >= 8 && newSize <= 72) {
-          document.getElementById('textContent').style.fontSize = newSize + "px";
+          textContent.style.fontSize = newSize + "px";
         }
+        applyBold();
       };
       reader.readAsText(file, 'UTF-8');
     }
@@ -227,13 +232,21 @@
   document.getElementById('boldToggleBtn').addEventListener('click', () => {
     const textContent = document.getElementById('textContent');
     if (textContent) {
-      if (textContent.style.fontWeight === "bold") {
-        textContent.style.fontWeight = "normal";
+      if (isBold) {
+        isBold = false;
       } else {
-        textContent.style.fontWeight = "bold";
+        isBold = true;
       }
+      applyBold();
     }
   });
+
+  function applyBold() {
+    const textContent = document.getElementById('textContent');
+    if (textContent) {
+      textContent.style.fontWeight = isBold ? "600" : "400";
+    }
+  }
 </script>
 </body>
 </html>
