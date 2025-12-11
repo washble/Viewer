@@ -64,6 +64,7 @@
     <input type="number" id="fontSizeInput" value="16" min="8" max="72" /> px
     <button id="applySizeBtn">적용</button>
   </label>
+  <button id="boldToggleBtn">글씨 굵게</button>
 </div>
 
 <div class="controls" id="imageControls" style="display:none;">
@@ -221,6 +222,17 @@
       imageScaleInput.value = currentScale.toFixed(2);
     }
   }
+
+  document.getElementById('boldToggleBtn').addEventListener('click', () => {
+    const textContent = document.getElementById('textContent');
+    if (textContent) {
+      if (textContent.style.fontWeight === "bold") {
+        textContent.style.fontWeight = "normal";
+      } else {
+        textContent.style.fontWeight = "bold";
+      }
+    }
+  });
 </script>
 </body>
 </html>
